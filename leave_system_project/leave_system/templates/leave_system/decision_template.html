@@ -1,0 +1,166 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            margin: 0;
+            padding: 20px;
+        }
+        .header-left {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            line-height: 1.2;
+        }
+        .header-logo {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            width: 50px;
+            height: auto;
+        }
+        .header-text {
+            margin-top: 60px;
+        }
+        .header-right {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 200px;
+        }
+        .contact-info {
+            margin-top: 120px;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        .subject {
+            margin-top: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .considerations {
+            margin-top: 20px;
+            font-size: 8px;
+            line-height: 1.2;
+        }
+        .decision-title {
+            margin-top: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+        .decision {
+            margin-top: 10px;
+            font-size: 12px;
+            line-height: 1.5;
+            text-align: justify;
+        }
+        .notification {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-left">
+        <img src="{{ static_url }}images/greek_republic_logo.jpg" class="header-logo" alt="Greek Republic Logo">
+        <div class="header-text">
+            {{ leave_request.header_text|linebreaksbr }}
+        </div>
+    </div>
+    <div class="header-right">
+        <!-- Κενό για ΠΔΕ Δυτικής Ελλάδας και ημερομηνία -->
+    </div>
+    <div class="contact-info">
+        <p>Ταχ. διεύθυνση: Ακτής Δυμαίων 25α, Πάτρα</p>
+        <p>Ταχ. κώδικας: 26222</p>
+        <p>Ταχ. θυρίδα: 2540</p>
+        <p>Πληροφορίες: {{ leave_request.processed_by_name|default:"Α. Κορσιάνου" }}</p>
+        <p>Τηλέφωνο: {{ leave_request.processed_by_phone|default:"2610–362423" }}</p>
+        <p>Ηλ. Ταχυδρομείο: pdede@sch.gr</p>
+    </div>
+    <div class="subject">
+        Θέμα: {{ leave_request.leave_type.subject_text }}
+    </div>
+    <div class="considerations">
+        <strong>Έχοντας υπόψη:</strong><br>
+        {{ leave_request.leave_type.decision_text|linebreaksbr }}
+    </div>
+    <div class="decision-title">
+        Α π ο φ α σ ί ζ ο υ μ ε
+    </div>
+    <div class="decision">
+        <p>
+            Χορηγούμε {% if leave_request.employee.gender == "Α" %}στον{% else %}στην{% endif %}
+            {{ leave_request.employee.name_in_accusative }}
+            {{ leave_request.employee.surname_in_accusative }},
+            {{ leave_request.employee.role_description }},
+            {{ leave_request.leave_type.decision_text }}
+            {% with total_days=leave_request.calculate_total_working_days %}
+                {% if total_days == 1 %}
+                    μίας (1) εργάσιμης ημέρας
+                {% else %}
+                    {{ total_days }} ({{ total_days|floatformat:0 }}) εργάσιμων ημερών
+                {% endif %}
+            {% endwith %},
+            {% for interval in intervals %}
+                {% if forloop.last and forloop.counter > 1 %}και {% endif %}
+                στις {{ interval.start_date|date:"d-m-Y" }}{% if interval.start_date != interval.end_date %} έως {{ interval.end_date|date:"d-m-Y" }}{% endif %}
+                {% if not forloop.last and forloop.counter < intervals|length - 1 %}, {% endif %}
+            {% endfor %}.
+        </p>
+    </div>
+    <div class="notification">
+        <strong>Κοινοποίηση:</strong><br>
+        {{ leave_request.employee.notification_recipients|linebreaksbr }}
+    </div>
+</body>
+</html>

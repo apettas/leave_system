@@ -1,0 +1,77 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html>
+<head>
+    <title>Αιτήσεις Αδειών Υφισταμένων</title>
+</head>
+<body>
+    <h1>Αιτήσεις Αδειών Υφισταμένων</h1>
+    <h2>Τμήματα που Είστε Προϊστάμενος</h2>
+    <ul>
+        {% for department in departments %}
+            <li>{{ department.name }} ({{ department.service.name }})</li>
+        {% endfor %}
+    </ul>
+    <h2>Αιτήσεις Αδειών</h2>
+    <table border="1">
+        <tr>
+            <th>Υπάλληλος</th>
+            <th>Τύπος Άδειας</th>
+            <th>Διαστήματα</th>
+            <th>Κατάσταση</th>
+            <th>Λόγος Απόρριψης</th>
+        </tr>
+        {% for leave in leave_requests %}
+            <tr>
+                <td>{{ leave.employee.full_name }}</td>
+                <td>{{ leave.leave_type.name }}</td>
+                <td>
+                    {% for interval in leave.intervals.all %}
+                        {{ interval.start_date }} - {{ interval.end_date }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                </td>
+                <td>{{ leave.get_status_display }}</td>
+                <td>{{ leave.rejection_reason|default:"-" }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
